@@ -26,6 +26,7 @@ public class TimeServlet extends HttpServlet {
     @Override
     public void init() {
         engine = new TemplateEngine();
+
         JakartaServletWebApplication jakartaServletWebApplication =
                 JakartaServletWebApplication.buildApplication(this.getServletContext());
 
@@ -79,6 +80,7 @@ public class TimeServlet extends HttpServlet {
     private String getTimezoneFromCookie(HttpServletRequest request) {
         String timezoneParam = null;
         Cookie[] cookies = request.getCookies();
+
         if (cookies != null) {
             for (Cookie cookie : cookies) {
                 if ("lastTimezone".equals(cookie.getName())) {
@@ -87,6 +89,7 @@ public class TimeServlet extends HttpServlet {
                 }
             }
         }
+
         return (timezoneParam != null) ? timezoneParam : "Etc/GMT";
     }
 
