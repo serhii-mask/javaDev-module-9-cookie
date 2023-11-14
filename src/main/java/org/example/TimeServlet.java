@@ -7,7 +7,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
-import org.thymeleaf.templateresolver.FileTemplateResolver;
+import org.thymeleaf.templateresolver.WebApplicationTemplateResolver;
+import org.thymeleaf.web.servlet.JakartaServletWebApplication;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -25,14 +26,24 @@ public class TimeServlet extends HttpServlet {
     @Override
     public void init() {
         engine = new TemplateEngine();
-        configureTemplateEngine();
+        JakartaServletWebApplication jakartaServletWebApplication =
+                JakartaServletWebApplication.buildApplication(this.getServletContext());
+
+        WebApplicationTemplateResolver
+                resolver = new WebApplicationTemplateResolver(jakartaServletWebApplication);
+        resolver.setPrefix("/WEB-INF/template/");
+        resolver.setSuffix(".html");
+        resolver.setTemplateMode("HTML5");
+        resolver.setOrder(engine.getTemplateResolvers().size());
+        resolver.setCacheable(false);
+        engine.addTemplateResolver(resolver);
     }
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
         response.setContentType("text/html");
 
-        String timezone = getTimezoneFromRequest(request);
+        String timezone = getTimezoneFromRequestOrCookie(request, response);
 
         String validTimezone = parserTimezone(timezone);
 
@@ -41,8 +52,6 @@ public class TimeServlet extends HttpServlet {
 
         Context context = new Context(request.getLocale(), Map.of("time", params));
 
-        response.addCookie(new Cookie("lastTimezone", timezone));
-
         try (PrintWriter writer = response.getWriter()) {
             engine.process("timePage", context, writer);
         } catch (IOException e) {
@@ -50,34 +59,35 @@ public class TimeServlet extends HttpServlet {
         }
     }
 
-    private void configureTemplateEngine() {
-        FileTemplateResolver resolver = new FileTemplateResolver();
-        resolver.setPrefix("C:\\Users\\serhi\\Documents\\java\\homeWorks\\javaDev-module-9-cookie\\src\\main\\webapp\\WEB-INF\\template\\");
-        resolver.setSuffix(".html");
-        resolver.setTemplateMode("HTML5");
-        resolver.setOrder(engine.getTemplateResolvers().size());
-        resolver.setCacheable(false);
-        engine.addTemplateResolver(resolver);
-    }
-
-    private String getTimezoneFromRequest(HttpServletRequest request) {
+    private String getTimezoneFromRequestOrCookie(HttpServletRequest request, HttpServletResponse response) {
         String timezoneParam = request.getParameter("timezone");
 
-        if (timezoneParam == null) {
-            Cookie[] cookies = request.getCookies();
-            if (cookies != null) {
-                for (Cookie cookie : cookies) {
-                    if ("lastTimezone".equals(cookie.getName())) {
-                        timezoneParam = cookie.getValue();
-                        break;
-                    }
-                }
-            }
-        } else {
+        if (timezoneParam != null) {
             timezoneParam = timezoneParam.replace("UTC+", "Etc/GMT-").replace("UTC-", "Etc/GMT+");
+            saveTimezoneToCookie(response, timezoneParam);
+
+            return timezoneParam;
         }
 
-        return timezoneParam != null ? timezoneParam : "Etc/GMT";
+        return getTimezoneFromCookie(request);
+    }
+
+    private void saveTimezoneToCookie(HttpServletResponse response, String timezoneParam) {
+        response.addCookie(new Cookie("lastTimezone", timezoneParam));
+    }
+
+    private String getTimezoneFromCookie(HttpServletRequest request) {
+        String timezoneParam = null;
+        Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            for (Cookie cookie : cookies) {
+                if ("lastTimezone".equals(cookie.getName())) {
+                    timezoneParam = cookie.getValue();
+                    break;
+                }
+            }
+        }
+        return (timezoneParam != null) ? timezoneParam : "Etc/GMT";
     }
 
     private String parserTimezone(String timezone) {
